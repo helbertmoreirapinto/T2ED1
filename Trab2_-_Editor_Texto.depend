@@ -1,0 +1,7 @@
+# depslib dependency file v1.0
+1536993114 source:c:\users\helbert\documents\github\trab2_-_editor_texto\main.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<stdbool.h>
+
