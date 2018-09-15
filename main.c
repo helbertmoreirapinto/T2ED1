@@ -1,13 +1,16 @@
+/** Declaracao dos imports do sistema **/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <Math.h>
 
+/** Declaracao dos define's de liberacao de memoria **/
 #define LIBERA_ATE_INICIO 0
 #define LIBERA_UNICA 1
 #define LIBERA_ATE_FIM 2
 
+/** Declaracao dos define's de comandos **/
 #define INSERIR_ANTES   'i'
 #define INSERIR_DEPOIS  'a'
 #define MODO_INSERT     'r'
@@ -20,10 +23,11 @@
 #define CURSOR_X        'g'
 #define IMPRIMIR_TEXTO  's'
 
+/** Declaracao dos define's de retorno de funcao **/
 #define ERROR 0
 #define OK 1
 
-
+/** Declaracao da struct principal **/
 struct Elemento{
     char *palavra;
     bool noEspecial;
@@ -31,6 +35,7 @@ struct Elemento{
     struct Elemento* prox;
 };
 
+/** Declaracao de uma struct unitaria que servira como no descitor **/
 struct{
     struct Elemento* prim;
     struct Elemento* atual;
@@ -38,6 +43,7 @@ struct{
     int tamLista;
 } descr;
 
+/** Declaracao dos typedef's **/
 typedef struct Elemento Elemento;
 typedef Elemento* Elemento_PTR;
 typedef Elemento** Elemento_PTR_PTR;
@@ -47,7 +53,7 @@ void liberar_memoria(Elemento_PTR_PTR, int);
 void inicializar_descritor();
 void imprimir_texto();
 int ler_arquivo(char*);
-void executar_comando(char, char*, bool);
+void executar_comando(char, char*);
 bool verificar_palavra_especial(char*);
 int inserir_palavra(char, char*, bool);
 int buscar_palavra(char*);
@@ -57,49 +63,60 @@ int mudar_pos_cursor(int);
 void mudar_pos_cursor_inicio();
 void mudar_pos_cursor_fim();
 int converter_char_to_int(char*);
+void remover_enter(char*);
 
+/** Funcao principal **/
 int main(){
     inicializar_descritor();
 
     /* Primeira parte do programa: ler o arquivo inicial */
-    char *nomeFile;
-    nomeFile = (char*)calloc(2, sizeof(char));
-    if(!nomeFile){
+    char *nomeArquivo;
+    nomeArquivo = (char*)calloc(2, sizeof(char));
+    if(!nomeArquivo){
         printf("Erro ao alocar memoria!\n");
         exit(0);
     }
-    fscanf(stdin, "%c", &nomeFile[0]);
+    fscanf(stdin, "%c", &nomeArquivo[0]);
 
-    if(!ler_arquivo(nomeFile)){
+    if(!ler_arquivo(nomeArquivo))
         printf("Erro ao ler o arquivo!\n");
-        exit(0);
-    }
-//    free(nomeFile);
+//    free(nomeArquivo);
 
     /* Segunda parte do programa: alterar os dados lidos */
     char comando;
-    char palavra[100];
-    bool especial;
+    char* palavra = NULL;
     while(comando != 's'){
         setbuf(stdin, NULL);
         fscanf(stdin, "%c", &comando);
         if(fgetc(stdin) == ' '){
+            palavra = (char*) malloc(100 * sizeof(char));
             fgets(palavra, 100, stdin);
-            printf("%s", palavra);
         }
-        especial = (comando != 'g') ? verificar_palavra_especial(palavra) : false;
-        executar_comando(comando, palavra, especial);
+        executar_comando(comando, palavra);
+        palavra = NULL;
     }
 //    liberar_memoria(descr.prim);
     return 0;
 }
 
+/** Funcao muda cursor para inicio da lista **/
 void mudar_pos_cursor_inicio(){
     descr.atual = descr.prim;
 }
 
+/** Funcao muda cursor para fim da lista **/
 void mudar_pos_cursor_fim(){
     descr.atual = descr.ult;
+}
+
+/** Funcao que remove o enter do fim da palavra **/
+void remover_enter(char* palavra){
+    int tam = strlen(palavra);
+    for(int i = 0; i < tam; i++)
+        if(palavra[i] == '\n'){
+            palavra[i] = '\0';
+            return;
+        }
 }
 
 int remover_palavra(){
@@ -108,15 +125,24 @@ int remover_palavra(){
         aux = descr.atual;
         if(descr.atual->ant)
             descr.atual->ant->prox = descr.atual->prox;
-        if(descr.atual->prox)
+        else
+            descr.prim = descr.atual->prox;
+        if(descr.atual->prox){
             descr.atual->prox->ant = descr.atual->ant;
-        free(aux);
+            descr.atual = descr.atual->prox;
+        }else{
+            descr.ult = descr.atual->ant;
+            descr.atual = descr.ult;
+        }
+        descr.tamLista--;
+        liberar_memoria(&aux, LIBERA_UNICA);
         return OK;
     }
     return ERROR;
 }
 
 int buscar_palavra(char* palavra){
+    remover_enter(palavra);
     Elemento_PTR aux = descr.prim;
     int cont = 0;
     while(aux){
@@ -139,8 +165,10 @@ int mudar_pos_cursor(int qtd){
         }
         if(!qtd)
             return OK;
-        if(!descr.atual)
+        if(!descr.atual){
+            descr.atual = (descr.prim) ? descr.prim :((descr.ult) ? descr.ult : NULL);
             return ERROR;
+        }
     }
     return ERROR;
 }
@@ -156,33 +184,45 @@ int substuir_palavra(char* palavra, bool especial){
 }
 
 int inserir_palavra(char ordem, char* palavra, bool especial){
-    Elemento_PTR no = malloc(sizeof(Elemento));
-    if(!no)
+    Elemento_PTR no = (Elemento_PTR) malloc(sizeof(Elemento));
+    if(!no || !palavra)
         return ERROR;
     no->palavra = palavra;
     no->noEspecial = especial;
 
     if(ordem == INSERIR_ANTES){
-        if(descr.atual)
+        if(descr.atual){
             no->ant = descr.atual->ant;
+            if(descr.atual->ant)
+                descr.atual->ant->prox = no;
+            descr.atual->ant = no;
+        }else
+            no->ant = NULL;
         no->prox = descr.atual;
+        if(descr.atual == descr.prim)
+            descr.prim = no;
     }else if(ordem == INSERIR_DEPOIS){
         no->ant = descr.atual;
-        if(descr.atual)
+        if(descr.atual){
             no->prox = descr.atual->prox;
+            if(descr.atual->prox)
+                descr.atual->prox->ant = no;
+            descr.atual->prox = no;
+        }else
+            no->prox = NULL;
+        if(descr.atual == descr.ult)
+            descr.ult = no;
     }
-
-    if(descr.ult)
-        descr.ult->prox = no;
-    else
-        descr.prim = no;
     descr.atual = no;
-    descr.ult = no;
+
+    if((descr.prim && !descr.ult) || (!descr.prim && descr.ult))
+        descr.prim = descr.atual = descr.ult = no;
     descr.tamLista++;
     return OK;
 }
 
 bool verificar_palavra_especial(char* palavra){
+    remover_enter(palavra);
     int tamPalavra = strlen(palavra);
     bool range_comum;
     for(int i = 0; i < tamPalavra; i++){
@@ -195,14 +235,14 @@ bool verificar_palavra_especial(char* palavra){
     return false;
 }
 
-void executar_comando(char comando, char* palavra, bool especial){
+void executar_comando(char comando, char* palavra){
     int aux = 0;
     switch(comando){
         case INSERIR_ANTES:
-            inserir_palavra(INSERIR_ANTES, palavra, especial);
+            inserir_palavra(INSERIR_ANTES, palavra, verificar_palavra_especial(palavra));
             break;
         case INSERIR_DEPOIS:
-            inserir_palavra(INSERIR_DEPOIS, palavra, especial);
+            inserir_palavra(INSERIR_DEPOIS, palavra, verificar_palavra_especial(palavra));
             break;
         case BUSCAR_PALAVRA:
             aux = buscar_palavra(palavra);
@@ -210,7 +250,7 @@ void executar_comando(char comando, char* palavra, bool especial){
                 printf("%d\n", aux);
             break;
         case MODO_INSERT:
-            if(!substuir_palavra(palavra, especial))
+            if(!substuir_palavra(palavra, verificar_palavra_especial(palavra)))
                 printf("Erro ao substituir palavra\n");
             break;
         case REMOVER_PALAVRA:
@@ -244,6 +284,7 @@ void executar_comando(char comando, char* palavra, bool especial){
 }
 
 int converter_char_to_int(char* numStr){
+    remover_enter(numStr);
     int tam = strlen(numStr);
     int num = 0;
 	int i = 0;
@@ -296,9 +337,11 @@ void imprimir_texto(){
 
 int ler_arquivo(char* numFile){
     char extensao[5] = ".ext\0";
-    char *nmFile = (char*)malloc(6*sizeof(char));
+    char *nmFile = (char*) malloc(6*sizeof(char));
     nmFile = strcat(numFile, extensao);
     FILE* arquivo = fopen(nmFile, "r");
+//    free(nmFile);
+
     if(!arquivo)
         return ERROR;
 
@@ -314,14 +357,14 @@ int ler_arquivo(char* numFile){
 
         if(range_comum){
             cont++;
-            string = (char*)realloc(string, (cont+1) * sizeof(char));
+            string = (char*) realloc(string, (cont+1) * sizeof(char));
             string[cont-1] = carac;
             string[cont] = '\0';
         }else{
             if(string)
                 inserir_palavra(INSERIR_DEPOIS, string, false);
             if(carac != ' ' && carac != -1){
-                string = (char*)malloc(2 * sizeof(char));
+                string = (char*) malloc(2 * sizeof(char));
                 string[0] = carac;
                 string[1] = '\0';
                 inserir_palavra(INSERIR_DEPOIS, string, true);
