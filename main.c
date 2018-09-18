@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <Math.h>
+#include <math.h>
 
 /** Declaracao dos define's de liberacao de memoria **/
 #define LIBERA_ATE_INICIO 0
@@ -36,66 +36,81 @@ struct Elemento{
 };
 
 /** Declaracao de uma struct unitaria que servira como no descitor **/
+/** Declarei esta variavel global pois como ela nao eh tipada e eh utilizada por quase todas as funcoes **/
 struct{
     struct Elemento* prim;
     struct Elemento* atual;
     struct Elemento* ult;
-    int tamLista;
 } descr;
 
 /** Declaracao dos typedef's **/
 typedef struct Elemento Elemento;
 typedef Elemento* Elemento_PTR;
-typedef Elemento** Elemento_PTR_PTR;
 
 /** Declaracao dos prototipos das funcoes **/
-void liberar_memoria(Elemento_PTR_PTR, int);
-void inicializar_descritor();
-void imprimir_texto();
-int ler_arquivo(char*);
-void executar_comando(char, char*);
-bool verificar_palavra_especial(char*);
+void remover_caracteres_fora_ASCII(char*);
+void liberar_memoria(Elemento_PTR, int);
 int inserir_palavra(char, char*, bool);
-int buscar_palavra(char*);
+bool verificar_palavra_especial(char*);
+void executar_comando(char, char*);
 int substuir_palavra(char*, bool);
-int remover_palavra();
-int mudar_pos_cursor(int);
-void mudar_pos_cursor_inicio();
-void mudar_pos_cursor_fim();
 int converter_char_to_int(char*);
-void remover_enter(char*);
+void mudar_pos_cursor_inicio();
+void inicializar_descritor();
+void mudar_pos_cursor_fim();
+int mudar_pos_cursor(int);
+int buscar_palavra(char*);
+int ler_arquivo(char*);
+int remover_palavra();
+void imprimir_texto();
+int main();
 
 /** Funcao principal **/
 int main(){
     inicializar_descritor();
 
     /* Primeira parte do programa: ler o arquivo inicial */
+    /* Usuario insere numero do caso de teste [numero do nome do arquivo] */
     char *nomeArquivo;
-    nomeArquivo = (char*)calloc(2, sizeof(char));
+    nomeArquivo = (char*) calloc(6, sizeof(char));
     if(!nomeArquivo){
         printf("Erro ao alocar memoria!\n");
         exit(0);
     }
+	setbuf(stdin, NULL);
     fscanf(stdin, "%c", &nomeArquivo[0]);
 
     if(!ler_arquivo(nomeArquivo))
         printf("Erro ao ler o arquivo!\n");
-//    free(nomeArquivo);
+    free(nomeArquivo);
 
     /* Segunda parte do programa: alterar os dados lidos */
-    char comando;
-    char* palavra = NULL;
+    char* linhaComando	= NULL;
+    char* parametro		= NULL;
+    char comando		= '\0';
+
+    /* Enquanto o comando for diferente de imprimir continua a execucao */
     while(comando != 's'){
+        linhaComando = (char*) malloc(100 * sizeof(char));
         setbuf(stdin, NULL);
-        fscanf(stdin, "%c", &comando);
-        if(fgetc(stdin) == ' '){
-            palavra = (char*) malloc(100 * sizeof(char));
-            fgets(palavra, 100, stdin);
-        }
-        executar_comando(comando, palavra);
-        palavra = NULL;
+        fgets(linhaComando, 100, stdin);
+		comando = linhaComando[0];
+        if(comando < 'a' || comando > 'z')
+            continue;
+        if(linhaComando[1] == ' ')
+            for(int i = 2; i < 100; i++){
+                parametro = (char*) realloc(parametro, i * sizeof(char));
+                if(linhaComando[i] == '\n' || linhaComando[i] == '\0'){
+                    parametro[i - 2] = '\0';
+                    break;
+                }
+                parametro[i - 2] = linhaComando[i];
+            }
+        executar_comando(linhaComando[0], parametro);
+        free(linhaComando);
+        parametro = NULL;
     }
-//    liberar_memoria(descr.prim);
+    liberar_memoria(descr.prim, LIBERA_ATE_FIM);
     return 0;
 }
 
@@ -109,16 +124,22 @@ void mudar_pos_cursor_fim(){
     descr.atual = descr.ult;
 }
 
-/** Funcao que remove o enter do fim da palavra **/
-void remover_enter(char* palavra){
+/** Funcao que remove caracteres nao imprimiveis **/
+void remover_caracteres_fora_ASCII(char* palavra){
+    /* Verifica se o conteudo eh igual a <ENTER> */
+	if(!strcmp(palavra, "<ENTER>")){
+        strcpy(palavra, "\n\0");
+        return;
+    }
     int tam = strlen(palavra);
     for(int i = 0; i < tam; i++)
-        if(palavra[i] == '\n'){
+        if(palavra[i] < '!' || palavra[i] > '~'){ /* '!'(33) - '~'(126) Faixa de caracteres que podem ser impressos */
             palavra[i] = '\0';
             return;
         }
 }
 
+/** Funcao que remove uma palavra do texto **/
 int remover_palavra(){
     Elemento_PTR aux;
     if(descr.atual){
@@ -134,34 +155,45 @@ int remover_palavra(){
             descr.ult = descr.atual->ant;
             descr.atual = descr.ult;
         }
-        descr.tamLista--;
-        liberar_memoria(&aux, LIBERA_UNICA);
+        liberar_memoria(aux, LIBERA_UNICA);
         return OK;
     }
     return ERROR;
 }
 
+/** Funcao que busca na lista uma palavra identica a do parametro **/
 int buscar_palavra(char* palavra){
-    remover_enter(palavra);
-    Elemento_PTR aux = descr.prim;
+    remover_caracteres_fora_ASCII(palavra);
+    Elemento_PTR aux = descr.atual;
+    Elemento_PTR ini = descr.prim;
     int cont = 0;
     while(aux){
-        if(!strcmp(palavra, aux->palavra))
-            return cont;
-        cont++;
+        if(!strcmp(palavra, aux->palavra)){
+            while(ini){
+                if(!strcmp(palavra, ini->palavra))
+                    return cont;
+                cont++;
+                ini = ini->prox;
+            }
+        }
         aux = aux->prox;
     }
     return -1;
 }
 
+/** Funcao que altera o posionamento atual do cursor **/
+/** .Parametro Negativo -> retarda posicionamento **/
+/** .Parametro Positivo -> avanca posicionamento **/
 int mudar_pos_cursor(int qtd){
     while(descr.atual){
         if(qtd > 0){
             qtd--;
-            descr.atual = descr.atual->prox;
+            if(descr.atual->prox)
+                descr.atual = descr.atual->prox;
         }else if(qtd < 0){
             qtd++;
-            descr.atual = descr.atual->ant;
+            if(descr.atual->ant)
+                descr.atual = descr.atual->ant;
         }
         if(!qtd)
             return OK;
@@ -173,6 +205,7 @@ int mudar_pos_cursor(int qtd){
     return ERROR;
 }
 
+/** Funcao que substitui a palavra do no atual pela palavra que recebe via parametro **/
 int substuir_palavra(char* palavra, bool especial){
     if(descr.atual){
         free(descr.atual->palavra);
@@ -183,6 +216,7 @@ int substuir_palavra(char* palavra, bool especial){
     return ERROR;
 }
 
+/** Funcao que insere as palavras em nos e depois os insere na lista **/
 int inserir_palavra(char ordem, char* palavra, bool especial){
     Elemento_PTR no = (Elemento_PTR) malloc(sizeof(Elemento));
     if(!no || !palavra)
@@ -213,28 +247,29 @@ int inserir_palavra(char ordem, char* palavra, bool especial){
         if(descr.atual == descr.ult)
             descr.ult = no;
     }
-    descr.atual = no;
 
     if((descr.prim && !descr.ult) || (!descr.prim && descr.ult))
         descr.prim = descr.atual = descr.ult = no;
-    descr.tamLista++;
     return OK;
 }
 
+/** Funcao que verifica se o conteudo do vetor de char eh um conteudo com caracteres especiais **/
 bool verificar_palavra_especial(char* palavra){
-    remover_enter(palavra);
+    remover_caracteres_fora_ASCII(palavra);
+
     int tamPalavra = strlen(palavra);
-    bool range_comum;
+    bool faixaPadrao;
     for(int i = 0; i < tamPalavra; i++){
-        range_comum  =  (palavra[i] >= 'a' && palavra[i] <= 'z') ||
+        faixaPadrao  =  (palavra[i] >= 'a' && palavra[i] <= 'z') ||
                         (palavra[i] >= 'A' && palavra[i] <= 'Z') ||
                         (palavra[i] >= '0' && palavra[i] <= '9');
-        if(!range_comum)
+        if(!faixaPadrao)
             return true;
     }
     return false;
 }
 
+/** Funcao que seleciona qual acao sera realizada de acordo com o comando **/
 void executar_comando(char comando, char* palavra){
     int aux = 0;
     switch(comando){
@@ -259,11 +294,11 @@ void executar_comando(char comando, char* palavra){
             break;
         case AVANCAR_UM:
             if(!mudar_pos_cursor(1))
-                printf("Erro ao mover posicao do cursor atual\n");
+                printf("Erro ao mover posicao atual do cursor\n");
             break;
         case VOLTAR_UM:
             if(!mudar_pos_cursor(-1))
-                printf("Erro ao mover posicao do cursor atual\n");
+                printf("Erro ao mover posicao atual do cursor\n");
             break;
         case CURSOR_INICIO:
             mudar_pos_cursor_inicio();
@@ -279,12 +314,14 @@ void executar_comando(char comando, char* palavra){
             imprimir_texto();
             exit(0);
         default:
-            printf("comando desconhecido\n");
+            printf("comando %d desconhecido\n", comando);
         }
 }
 
+/** Funcao que converte uma lista de char contendo um numero, em um numero inteiro **/
+/** .Ex: (char*)"-53" -> (int)-53 **/
 int converter_char_to_int(char* numStr){
-    remover_enter(numStr);
+    remover_caracteres_fora_ASCII(numStr);
     int tam = strlen(numStr);
     int num = 0;
 	int i = 0;
@@ -297,33 +334,34 @@ int converter_char_to_int(char* numStr){
     return num;
 }
 
-void liberar_memoria(Elemento_PTR_PTR no, int ord){
+/** Funcao deasaloca os espacos de memoria utilizados **/
+/** [recebe a ordenacao que a memoria sera desalocada] **/
+void liberar_memoria(Elemento_PTR no, int ord){
     Elemento_PTR aux;
-    while(*no){
+    while(no){
 
-        if(ord == LIBERA_ATE_INICIO) aux = (*no)->ant;
-        else if(ord == LIBERA_UNICA) aux = NULL;
-        else if(ord == LIBERA_ATE_FIM) aux = (*no)->prox;
+        if(ord == LIBERA_ATE_INICIO) aux = no->ant; /* Libera a memoria do ponteiro do parametro ate o inicio */
+        else if(ord == LIBERA_UNICA) aux = NULL; /* Libera a memoria apenas do ponteiro do parametro */
+        else if(ord == LIBERA_ATE_FIM) aux = no->prox; /* Libera a memoria do ponteiro do parametro ate o fim */
 
-        free((*no)->palavra);
-        free(*no);
-        *no = aux;
+        free(no->palavra);
+        free(no);
+        no = aux;
     }
-    free(no);
 }
 
+/** Funcao que inicializa a variavel de descritor **/
 void inicializar_descritor(){
     descr.prim = descr.atual = descr.ult = NULL;
-    descr.tamLista = 0;
 }
 
+/** Funcao que exibe o conteudo da lista encadeada **/
 void imprimir_texto(){
     Elemento_PTR palavra = descr.prim;
     bool excessoes;
-
     while(palavra){
         printf("%s",palavra->palavra);
-
+		/* Excessoes que considerei que nao deveriam imprimir espaco apos */
         excessoes = strcmp(palavra->palavra, "\n") &&
                     strcmp(palavra->palavra,  "-") &&
                     strcmp(palavra->palavra, "\'") &&
@@ -335,44 +373,47 @@ void imprimir_texto(){
     }
 }
 
-int ler_arquivo(char* numFile){
-    char extensao[5] = ".ext\0";
-    char *nmFile = (char*) malloc(6*sizeof(char));
-    nmFile = strcat(numFile, extensao);
-    FILE* arquivo = fopen(nmFile, "r");
-//    free(nmFile);
-
+/** Funcao que le o arquivo [recebe o numero do arquivo como parametro] **/
+int ler_arquivo(char* nmArquivo){
+    nmArquivo = strcat(nmArquivo, ".ext\0");
+    FILE* arquivo = fopen(nmArquivo, "r");
     if(!arquivo)
         return ERROR;
 
     char carac;
-    char* string = NULL;
+    char* palavra = NULL;
     int cont = 0;
-    bool range_comum;
+    bool faixaPadrao;
     while(!feof(arquivo)){
-        carac = fgetc(arquivo);
-        range_comum = (carac >= 'a' && carac <= 'z') ||
+        carac = fgetc(arquivo); /* Pegar carctere por caractere pq no arquivo pode ter palavras hibridas. Ex: Hello! */
+        faixaPadrao = (carac >= 'a' && carac <= 'z') ||
                 (carac >= 'A' && carac <= 'Z') ||
                 (carac >= '0' && carac <= '9');
 
-        if(range_comum){
+        if(faixaPadrao){
             cont++;
-            string = (char*) realloc(string, (cont+1) * sizeof(char));
-            string[cont-1] = carac;
-            string[cont] = '\0';
+            palavra = (char*) realloc(palavra, (cont+1) * sizeof(char));
+            palavra[cont-1] = carac;
+            palavra[cont] = '\0';
         }else{
-            if(string)
-                inserir_palavra(INSERIR_DEPOIS, string, false);
-            if(carac != ' ' && carac != -1){
-                string = (char*) malloc(2 * sizeof(char));
-                string[0] = carac;
-                string[1] = '\0';
-                inserir_palavra(INSERIR_DEPOIS, string, true);
+            if(palavra){ /* Se esta aqui eh pq encontrou caracter que esta fora dos comuns */
+                inserir_palavra(INSERIR_DEPOIS, palavra, false); /* Insere na lista a palavra que criei no if */
+                mudar_pos_cursor_fim(); /* Muda a posicao do cursor para inserir de forma correta as palavras na lista */
+            }
+            if(carac != ' ' && carac != -1){ /* Unicos caracteres que serao ignorados ' '(32) e EOF(-1) */
+                palavra = (char*) calloc(2, sizeof(char));
+                if(!palavra)
+                    printf("Erro ao alocar memoria!\n");
+                palavra[0] = carac;
+                inserir_palavra(INSERIR_DEPOIS, palavra, true); /* Insere o caracter especial na lista de palavras */
+                mudar_pos_cursor_fim(); /* Muda a posicao do cursor para inserir de forma correta as palavras na lista */
             }
             cont = 0;
-            string = NULL;
+            palavra = NULL;
         }
     }
+    mudar_pos_cursor_inicio(); /* Retorna a posicao do cursor para o inicio */
+
     fclose(arquivo);
     return OK;
 }
