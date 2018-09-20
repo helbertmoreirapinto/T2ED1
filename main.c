@@ -35,17 +35,17 @@ struct Elemento{
     struct Elemento* prox;
 };
 
-/** Declaracao de uma struct unitaria que servira como no descitor **/
-/** Declarei esta variavel global pois como ela nao eh tipada e eh utilizada por quase todas as funcoes **/
-struct{
-    struct Elemento* prim;
-    struct Elemento* atual;
-    struct Elemento* ult;
-} descr;
-
 /** Declaracao dos typedef's **/
 typedef struct Elemento Elemento;
 typedef Elemento* Elemento_PTR;
+
+/** Declaracao de uma struct unitaria que servira como no descitor **/
+/** Declarei esta variavel global pois ela nao eh tipada **/
+struct{
+    Elemento_PTR prim;
+    Elemento_PTR atual;
+    Elemento_PTR ult;
+} descr;
 
 /** Declaracao dos prototipos das funcoes **/
 void remover_caracteres_fora_ASCII(char*);
@@ -148,13 +148,13 @@ int remover_palavra(){
             descr.atual->ant->prox = descr.atual->prox;
         else
             descr.prim = descr.atual->prox;
-        if(descr.atual->prox){
+
+        if(descr.atual->prox)
             descr.atual->prox->ant = descr.atual->ant;
-            descr.atual = descr.atual->prox;
-        }else{
+        else
             descr.ult = descr.atual->ant;
-            descr.atual = descr.ult;
-        }
+
+        descr.atual = (descr.atual->prox) ? descr.atual->prox :((descr.atual->ant) ? descr.atual->ant : NULL); /* Nova posicao do cursor */
         liberar_memoria(aux, LIBERA_UNICA);
         return OK;
     }
@@ -168,11 +168,11 @@ int buscar_palavra(char* palavra){
     Elemento_PTR ini = descr.prim;
     int cont = 0;
     while(aux){
-        if(!strcmp(palavra, aux->palavra)){
+        if(!strcmp(palavra, aux->palavra)){ /* Se achou a palavra apartir do cursor */
             while(ini){
-                if(!strcmp(palavra, ini->palavra))
+                if(ini == aux)              /* Vai ate o ponteiro onde estava a palavra encontrada */
                     return cont;
-                cont++;
+                cont++;                     /* Comeca a contagem apartir do inicial */
                 ini = ini->prox;
             }
         }
@@ -198,7 +198,7 @@ int mudar_pos_cursor(int qtd){
         if(!qtd)
             return OK;
         if(!descr.atual){
-            descr.atual = (descr.prim) ? descr.prim :((descr.ult) ? descr.ult : NULL);
+            descr.atual = (descr.prim) ? descr.prim :((descr.ult) ? descr.ult : NULL); /* So para nao dar erro */
             return ERROR;
         }
     }
@@ -224,31 +224,31 @@ int inserir_palavra(char ordem, char* palavra, bool especial){
     no->palavra = palavra;
     no->noEspecial = especial;
 
-    if(ordem == INSERIR_ANTES){
-        if(descr.atual){
+    if(ordem == INSERIR_ANTES){             /** Comando 'i' **/
+        if(descr.atual){                    /* Se nao eh a primeira palavra */
             no->ant = descr.atual->ant;
             if(descr.atual->ant)
                 descr.atual->ant->prox = no;
             descr.atual->ant = no;
         }else
             no->ant = NULL;
-        no->prox = descr.atual;
-        if(descr.atual == descr.prim)
+        no->prox = descr.atual;             /* O proximo do no sempre sera o proximo do cursor, mesmo q este (proximo) seja NULL */
+        if(descr.atual == descr.prim)       /* Caso de inserir um no antes do primeiro, aletra o primeiro */
             descr.prim = no;
-    }else if(ordem == INSERIR_DEPOIS){
-        no->ant = descr.atual;
-        if(descr.atual){
+    }else if(ordem == INSERIR_DEPOIS){      /** Comando 'a' **/
+        no->ant = descr.atual;              /* O anterior do no sempre sera o anreiror do cursor, mesmo q este (anterior) seja NULL */
+        if(descr.atual){                    /* Se nao eh a primeira palavra */
             no->prox = descr.atual->prox;
             if(descr.atual->prox)
                 descr.atual->prox->ant = no;
             descr.atual->prox = no;
         }else
             no->prox = NULL;
-        if(descr.atual == descr.ult)
+        if(descr.atual == descr.ult)        /* Caso de inserir um no depois do ultimo, aletra o ultimo */
             descr.ult = no;
     }
 
-    if((descr.prim && !descr.ult) || (!descr.prim && descr.ult))
+    if((descr.prim && !descr.ult) || (!descr.prim && descr.ult)) /* Se primeiro ou ultimo eh nulo, e o outro nao eh, entao so ha um no inserido na lista */
         descr.prim = descr.atual = descr.ult = no;
     return OK;
 }
@@ -325,10 +325,10 @@ int converter_char_to_int(char* numStr){
     int tam = strlen(numStr);
     int num = 0;
 	int i = 0;
-    for(i = tam; i > 0; i--){
+    for(i = tam; i > 0; i--){ /* Do ultimo para o primeiro */
         if(numStr[i-1] >= '0' && numStr[i-1] <= '9')
-            num += (numStr[i-1] - '0') * pow(10, (tam-i));
-        else if(numStr[i-1] == '-')
+            num += (numStr[i-1] - '0') * pow(10, (tam-i)); /* Elevado a uma potencia de 10 */
+        else if(numStr[i-1] == '-') /* Caso de numeros negativos */
             num *= -1;
     }
     return num;
